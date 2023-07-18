@@ -1,6 +1,6 @@
 /**
  * Usage:
- * Usage: yarn script scripts/udpate-dns-target.ts [options]
+ * Usage: yarn script scripts/install-service.ts [options]
  *
  * Options:
  *   -d, --dry-run                          Dry run
