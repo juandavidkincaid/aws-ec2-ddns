@@ -1,16 +1,3 @@
-/**
- * Usage: yarn script scripts/update-dns-target.ts[options]
- *
- * Options:
- *   -d, --dry-run                          Dry run
- *   -t, --ttl <ttl>                        TTL for created records (default: 60)
- *   -p, --profile <profile>                AWS profile to use
- *   -z, --hosted-zone-id <hosted-zone-id>  AWS Route 53 Hosted Zone Id
- *   -n, --record-name <record-name...>     Target domain record names to create records for
- *   -h, --help                             display help for command
- */
-
-import { Command } from 'commander';
 import boxen from 'boxen';
 import axios from 'axios';
 import {
@@ -20,22 +7,43 @@ import {
   Route53
 } from '@aws-sdk/client-route-53';
 import { fromIni } from '@aws-sdk/credential-providers';
+import { ZodError, z } from 'zod';
+import { fromZodError } from 'zod-validation-error';
+
+type UpdateDnsTargetConfig = z.infer<typeof UpdateDnsTargetConfigSchema>;
+
+const UpdateDnsTargetConfigSchema = z.object({
+  dryRun: z.boolean().optional(),
+  ttl: z.number().min(1),
+  profile: z.string().min(1).optional(),
+  hostedZoneId: z.string().min(1),
+  recordName: z.string().min(1).array()
+});
 
 const validateIPv4Address = (ipAddress: string) => {
   const ipv4Regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
   return ipv4Regex.test(ipAddress);
 };
 
-const updateDnsTarget = async (options: {
-  dryRun: boolean;
-  ttl: number;
-  profile: string | undefined;
-  hostedZoneId: string;
-  recordName: string[];
-}): Promise<void> => {
+const validateConfig = (config: unknown): config is UpdateDnsTargetConfig => {
+  try {
+    UpdateDnsTargetConfigSchema.parse(config);
+    return true;
+  } catch (e) {
+    if (e instanceof ZodError) {
+      console.log(fromZodError(e));
+      return false;
+    }
+    throw e;
+  }
+};
+
+const updateDnsTarget = async (
+  config: UpdateDnsTargetConfig
+): Promise<void> => {
   console.log(
     boxen(
-      options.dryRun
+      config.dryRun
         ? 'Dry run: Creating target DNS records'
         : 'Creating target DNS records',
       {
@@ -45,9 +53,13 @@ const updateDnsTarget = async (options: {
     )
   );
 
+  if (!validateConfig(config)) {
+    return;
+  }
+
   const route53 = new Route53({
-    credentials: options.profile
-      ? fromIni({ profile: options.profile })
+    credentials: config.profile
+      ? fromIni({ profile: config.profile })
       : undefined,
     region: 'us-east-1'
   });
@@ -63,10 +75,10 @@ const updateDnsTarget = async (options: {
   }
 
   const currentRecords = await route53.listResourceRecordSets({
-    HostedZoneId: options.hostedZoneId
+    HostedZoneId: config.hostedZoneId
   });
 
-  const ipRecords = options.recordName.map((_recordName) => {
+  const ipRecords = config.recordName.map((_recordName) => {
     const route53Record = currentRecords.ResourceRecordSets?.find(
       (record) => record.Name === _recordName && record.Type === RRType.A
     );
@@ -91,7 +103,7 @@ const updateDnsTarget = async (options: {
     }
 
     console.log(
-      `Adding change batch: Ip from ${ipRecord.recordIpAddress} to ${newIpAddress} with ttl ${options.ttl}`
+      `Adding change batch: Ip from ${ipRecord.recordIpAddress} to ${newIpAddress} with ttl ${config.ttl}`
     );
 
     changeBatch.push({
@@ -100,18 +112,18 @@ const updateDnsTarget = async (options: {
         Type: RRType.A,
         Name: ipRecord.recordName,
         ResourceRecords: [{ Value: newIpAddress }],
-        TTL: options.ttl
+        TTL: config.ttl
       }
     });
   }
 
-  if (options.dryRun) {
+  if (config.dryRun) {
     console.log('Skip on dry run');
     return;
   }
 
   await route53.changeResourceRecordSets({
-    HostedZoneId: options.hostedZoneId,
+    HostedZoneId: config.hostedZoneId,
     ChangeBatch: {
       Comment: 'Update from aws-ec2-ddns',
       Changes: changeBatch
@@ -121,30 +133,9 @@ const updateDnsTarget = async (options: {
   console.log('Updated records');
 };
 
-const program = new Command();
-program.option('-d, --dry-run', 'Dry run');
-program.option(
-  '-t, --ttl <ttl>',
-  'TTL for created records',
-  (value) => {
-    const number = parseInt(value);
-    if (isNaN(number)) {
-      throw new Error(`Not valid number: ttl: ${value}`);
-    }
-    return number;
-  },
-  60
-);
-program.option('-p, --profile <profile>', 'AWS profile to use');
-program.requiredOption(
-  '-z, --hosted-zone-id <hosted-zone-id>',
-  'AWS Route 53 Hosted Zone Id'
-);
-program.requiredOption(
-  '-n, --record-name <record-name...>',
-  'Target domain record names to create records for'
-);
-
-program.action(updateDnsTarget);
-
-program.parseAsync();
+export {
+  type UpdateDnsTargetConfig,
+  UpdateDnsTargetConfigSchema,
+  validateConfig,
+  updateDnsTarget
+};

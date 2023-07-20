@@ -1,5 +1,5 @@
 {
-  "include": ["scripts"],
+  "include": ["scripts", "src"],
   "compilerOptions": {
     "target": "ES2022",
     "allowJs": false,

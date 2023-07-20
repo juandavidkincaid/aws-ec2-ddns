@@ -7,7 +7,7 @@
  *   -t, --ttl <ttl>                        TTL for created records (default: 60)
  *   -p, --profile <profile>                AWS profile to use
  *   -z, --hosted-zone-id <hosted-zone-id>  AWS Route 53 Hosted Zone Id
- *   -n, --record-name <record-name>        Target domain record to create records for
+ *   -n, --record-name <record-name...>     Target domain record names to create records for
  *   -h, --help                             display help for command
  */
 
@@ -19,13 +19,17 @@ import { Command } from 'commander';
 import boxen from 'boxen';
 import { packageDirectory } from 'pkg-dir';
 
-const installService = async (options: {
-  dryRun: boolean;
-  ttl: number;
-  profile: string;
-  hostedZoneId: string;
-  recordName: string;
-}): Promise<void> => {
+import {
+  UpdateDnsTargetConfig,
+  validateConfig
+} from '../src/update-dns-target.ts';
+
+const generateInstallationConfigFileName = () =>
+  `${Date.now()}-${Math.floor(Math.random() * 1e9).toString(16)}.json`;
+
+const installService = async (
+  options: UpdateDnsTargetConfig
+): Promise<void> => {
   console.log(
     boxen(
       options.dryRun
@@ -37,6 +41,10 @@ const installService = async (options: {
       }
     )
   );
+
+  if (!validateConfig({ ...options, dryRun: false })) {
+    return;
+  }
 
   const serviceName = 'aws-ec2-ddns';
   const rootDir = await packageDirectory();
@@ -50,15 +58,27 @@ const installService = async (options: {
     { encoding: 'utf-8' }
   );
 
+  const installationConfigFilePath = path.join(
+    rootDir,
+    '.installations',
+    generateInstallationConfigFileName()
+  );
+
   const command = [
     process.execPath,
     '--loader ts-node/esm --inspect',
-    path.join(rootDir, 'scripts', 'update-dns-target.ts'),
-    `-t ${options.ttl}`,
-    `-p ${options.profile}`,
-    `-z ${options.hostedZoneId}`,
-    `-n ${options.recordName}`
+    path.join(rootDir, 'scripts', 'update-dns-target-with-config.ts'),
+    `-c ${installationConfigFilePath}`
   ].join(' ');
+
+  const finalInstallationConfigFileContent = JSON.stringify(
+    { ...options, dryRun: false },
+    null,
+    2
+  );
+
+  console.log('Config File Content');
+  console.log(finalInstallationConfigFileContent);
 
   const finalServiceFileContent = serviceFileContent
     .replace('$$command$$', command)
@@ -71,6 +91,11 @@ const installService = async (options: {
     console.log('Skip on dry run');
     return;
   }
+
+  await fs.promises.writeFile(
+    installationConfigFilePath,
+    finalInstallationConfigFileContent
+  );
 
   await fs.promises.writeFile(
     `/etc/systemd/system/${serviceName}.service`,
@@ -102,8 +127,8 @@ program.requiredOption(
   'AWS Route 53 Hosted Zone Id'
 );
 program.requiredOption(
-  '-n, --record-name <record-name>',
-  'Target domain record to create records for'
+  '-n, --record-name <record-name...>',
+  'Target domain record names to create records for'
 );
 
 program.action(installService);
