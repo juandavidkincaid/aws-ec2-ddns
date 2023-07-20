@@ -66,7 +66,7 @@ const installService = async (
 
   const command = [
     process.execPath,
-    '--loader ts-node/esm --inspect',
+    '--loader ts-node/esm',
     path.join(rootDir, 'scripts', 'update-dns-target-with-config.ts'),
     `-c ${installationConfigFilePath}`
   ].join(' ');
