@@ -25,7 +25,7 @@ const validateIPv4Address = (ipAddress: string) => {
 const updateDnsTarget = async (options: {
   dryRun: boolean;
   ttl: number;
-  profile: string;
+  profile: string | undefined;
   hostedZoneId: string;
   recordName: string;
 }): Promise<void> => {
@@ -42,7 +42,9 @@ const updateDnsTarget = async (options: {
   );
 
   const route53 = new Route53({
-    credentials: fromIni({ profile: options.profile }),
+    credentials: options.profile
+      ? fromIni({ profile: options.profile })
+      : undefined,
     region: 'us-east-1'
   });
 
