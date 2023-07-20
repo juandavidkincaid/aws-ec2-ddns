@@ -92,6 +92,10 @@ const installService = async (
     return;
   }
 
+  await fs.promises.mkdir(path.dirname(finalInstallationConfigFileContent), {
+    recursive: true
+  });
+
   await fs.promises.writeFile(
     installationConfigFilePath,
     finalInstallationConfigFileContent
