@@ -122,6 +122,11 @@ const updateDnsTarget = async (
     return;
   }
 
+  if (changeBatch.length === 0) {
+    console.log('No records to update, exiting');
+    return;
+  }
+
   await route53.changeResourceRecordSets({
     HostedZoneId: config.hostedZoneId,
     ChangeBatch: {
