@@ -1,20 +1,24 @@
 /**
- * Usage:
- * Usage: yarn script scripts/udpate-dns-target.ts [options]
+ * Usage: yarn script scripts/update-dns-target.ts[options]
  *
  * Options:
  *   -d, --dry-run                          Dry run
  *   -t, --ttl <ttl>                        TTL for created records (default: 60)
  *   -p, --profile <profile>                AWS profile to use
  *   -z, --hosted-zone-id <hosted-zone-id>  AWS Route 53 Hosted Zone Id
- *   -n, --record-name <record-name>        Target domain record to create records for
+ *   -n, --record-name <record-name...>     Target domain record names to create records for
  *   -h, --help                             display help for command
  */
 
 import { Command } from 'commander';
 import boxen from 'boxen';
 import axios from 'axios';
-import { ChangeAction, RRType, Route53 } from '@aws-sdk/client-route-53';
+import {
+  Change,
+  ChangeAction,
+  RRType,
+  Route53
+} from '@aws-sdk/client-route-53';
 import { fromIni } from '@aws-sdk/credential-providers';
 
 const validateIPv4Address = (ipAddress: string) => {
@@ -27,7 +31,7 @@ const updateDnsTarget = async (options: {
   ttl: number;
   profile: string | undefined;
   hostedZoneId: string;
-  recordName: string;
+  recordName: string[];
 }): Promise<void> => {
   console.log(
     boxen(
@@ -62,20 +66,44 @@ const updateDnsTarget = async (options: {
     HostedZoneId: options.hostedZoneId
   });
 
-  const ipRecord = currentRecords.ResourceRecordSets?.find(
-    (record) => record.Name === options.recordName && record.Type === 'A'
-  );
+  const ipRecords = options.recordName.map((_recordName) => {
+    const route53Record = currentRecords.ResourceRecordSets?.find(
+      (record) => record.Name === _recordName && record.Type === RRType.A
+    );
 
-  const oldIpAddress = ipRecord?.ResourceRecords?.[0].Value;
+    const recordIpAddress = route53Record?.ResourceRecords?.[0].Value;
 
-  if (oldIpAddress === newIpAddress) {
-    console.log('Ip has not changed, skipping change');
-    return;
+    return {
+      recordName: _recordName,
+      recordIpAddress,
+      route53Record
+    };
+  });
+
+  const changeBatch: Change[] = [];
+
+  for (const ipRecord of ipRecords) {
+    if (ipRecord.recordIpAddress === newIpAddress) {
+      console.log(
+        `[${ipRecord.recordName}]: Ip has not changed, skipping change`
+      );
+      continue;
+    }
+
+    console.log(
+      `Adding change batch: Ip from ${ipRecord.recordIpAddress} to ${newIpAddress} with ttl ${options.ttl}`
+    );
+
+    changeBatch.push({
+      Action: ChangeAction.UPSERT,
+      ResourceRecordSet: {
+        Type: RRType.A,
+        Name: ipRecord.recordName,
+        ResourceRecords: [{ Value: newIpAddress }],
+        TTL: options.ttl
+      }
+    });
   }
-
-  console.log(
-    `Updating Ip from ${oldIpAddress} to ${newIpAddress} with ttl ${options.ttl}`
-  );
 
   if (options.dryRun) {
     console.log('Skip on dry run');
@@ -86,19 +114,11 @@ const updateDnsTarget = async (options: {
     HostedZoneId: options.hostedZoneId,
     ChangeBatch: {
       Comment: 'Update from aws-ec2-ddns',
-      Changes: [
-        {
-          Action: ChangeAction.UPSERT,
-          ResourceRecordSet: {
-            Type: RRType.A,
-            Name: options.recordName,
-            ResourceRecords: [{ Value: newIpAddress }],
-            TTL: options.ttl
-          }
-        }
-      ]
+      Changes: changeBatch
     }
   });
+
+  console.log('Updated records');
 };
 
 const program = new Command();
@@ -121,8 +141,8 @@ program.requiredOption(
   'AWS Route 53 Hosted Zone Id'
 );
 program.requiredOption(
-  '-n, --record-name <record-name>',
-  'Target domain record to create records for'
+  '-n, --record-name <record-name...>',
+  'Target domain record names to create records for'
 );
 
 program.action(updateDnsTarget);
