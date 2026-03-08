@@ -1,6 +1,5 @@
 /**
- * Usage:
- * Usage: yarn script scripts/install-service.ts [options]
+ * Usage: pnpm script scripts/install-service.ts [options]
  *
  * Options:
  *   -d, --dry-run                          Dry run
@@ -11,16 +10,16 @@
  *   -h, --help                             display help for command
  */
 
-import child_process from 'child_process';
-import path from 'path';
-import fs from 'fs';
+import child_process from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
 
 import { Command } from 'commander';
 import boxen from 'boxen';
-import { packageDirectory } from 'pkg-dir';
+import { packageDirectory } from 'package-directory';
 
 import {
-  UpdateDnsTargetConfig,
+  type IUpdateDnsTargetConfig,
   validateConfig
 } from '../src/update-dns-target.ts';
 
@@ -28,7 +27,7 @@ const generateInstallationConfigFileName = () =>
   `${Date.now()}-${Math.floor(Math.random() * 1e9).toString(16)}.json`;
 
 const installService = async (
-  options: UpdateDnsTargetConfig
+  options: IUpdateDnsTargetConfig
 ): Promise<void> => {
   console.log(
     boxen(
@@ -66,7 +65,7 @@ const installService = async (
 
   const command = [
     process.execPath,
-    '--loader ts-node/esm',
+    path.join(rootDir, 'node_modules', '.bin', 'tsx'),
     path.join(rootDir, 'scripts', 'update-dns-target-with-config.ts'),
     `-c ${installationConfigFilePath}`
   ].join(' ');
@@ -116,8 +115,8 @@ program.option('-d, --dry-run', 'Dry run');
 program.option(
   '-t, --ttl <ttl>',
   'TTL for created records',
-  (value) => {
-    const number = parseInt(value);
+  (value: string) => {
+    const number = parseInt(value, 10);
     if (isNaN(number)) {
       throw new Error(`Not valid number: ttl: ${value}`);
     }

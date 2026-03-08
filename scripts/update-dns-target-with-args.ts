@@ -1,5 +1,5 @@
 /**
- * Usage: yarn script scripts/update-dns-target-with-args.ts [options]
+ * Usage: pnpm script scripts/update-dns-target-with-args.ts [options]
  *
  * Options:
  *   -d, --dry-run                          Dry run
@@ -13,12 +13,12 @@
 import { Command } from 'commander';
 
 import {
-  UpdateDnsTargetConfig,
+  type IUpdateDnsTargetConfig,
   updateDnsTarget
 } from '../src/update-dns-target.ts';
 
 const updateDnsTargetWithArgs = async (
-  options: UpdateDnsTargetConfig
+  options: IUpdateDnsTargetConfig
 ): Promise<void> => {
   await updateDnsTarget(options);
 };
@@ -28,8 +28,8 @@ program.option('-d, --dry-run', 'Dry run');
 program.option(
   '-t, --ttl <ttl>',
   'TTL for created records',
-  (value) => {
-    const number = parseInt(value);
+  (value: string) => {
+    const number = parseInt(value, 10);
     if (isNaN(number)) {
       throw new Error(`Not valid number: ttl: ${value}`);
     }

@@ -1,18 +1,22 @@
 import boxen from 'boxen';
 import axios from 'axios';
 import {
-  Change,
+  type Change,
   ChangeAction,
+  ChangeResourceRecordSetsCommand,
+  ListResourceRecordSetsCommand,
   RRType,
-  Route53
+  Route53Client
 } from '@aws-sdk/client-route-53';
 import { fromIni } from '@aws-sdk/credential-providers';
-import { ZodError, z } from 'zod';
+import { z, ZodError } from 'zod';
 import { fromZodError } from 'zod-validation-error';
 
-type UpdateDnsTargetConfig = z.infer<typeof UpdateDnsTargetConfigSchema>;
+export type IUpdateDnsTargetConfig = z.infer<
+  typeof UpdateDnsTargetConfigSchema
+>;
 
-const UpdateDnsTargetConfigSchema = z.object({
+export const UpdateDnsTargetConfigSchema = z.object({
   dryRun: z.boolean().optional(),
   ttl: z.number().min(1),
   profile: z.string().min(1).optional(),
@@ -25,7 +29,9 @@ const validateIPv4Address = (ipAddress: string) => {
   return ipv4Regex.test(ipAddress);
 };
 
-const validateConfig = (config: unknown): config is UpdateDnsTargetConfig => {
+export const validateConfig = (
+  config: unknown
+): config is IUpdateDnsTargetConfig => {
   try {
     UpdateDnsTargetConfigSchema.parse(config);
     return true;
@@ -38,8 +44,8 @@ const validateConfig = (config: unknown): config is UpdateDnsTargetConfig => {
   }
 };
 
-const updateDnsTarget = async (
-  config: UpdateDnsTargetConfig
+export const updateDnsTarget = async (
+  config: IUpdateDnsTargetConfig
 ): Promise<void> => {
   console.log(
     boxen(
@@ -57,7 +63,7 @@ const updateDnsTarget = async (
     return;
   }
 
-  const route53 = new Route53({
+  const route53 = new Route53Client({
     credentials: config.profile
       ? fromIni({ profile: config.profile })
       : undefined,
@@ -74,9 +80,11 @@ const updateDnsTarget = async (
     throw new Error(`Malformed ip address, skipping => ${newIpAddress}`);
   }
 
-  const currentRecords = await route53.listResourceRecordSets({
-    HostedZoneId: config.hostedZoneId
-  });
+  const currentRecords = await route53.send(
+    new ListResourceRecordSetsCommand({
+      HostedZoneId: config.hostedZoneId
+    })
+  );
 
   const ipRecords = config.recordName.map((_recordName) => {
     const route53Record = currentRecords.ResourceRecordSets?.find(
@@ -127,20 +135,15 @@ const updateDnsTarget = async (
     return;
   }
 
-  await route53.changeResourceRecordSets({
-    HostedZoneId: config.hostedZoneId,
-    ChangeBatch: {
-      Comment: 'Update from aws-ec2-ddns',
-      Changes: changeBatch
-    }
-  });
+  await route53.send(
+    new ChangeResourceRecordSetsCommand({
+      HostedZoneId: config.hostedZoneId,
+      ChangeBatch: {
+        Comment: 'Update from aws-ec2-ddns',
+        Changes: changeBatch
+      }
+    })
+  );
 
   console.log('Updated records');
-};
-
-export {
-  type UpdateDnsTargetConfig,
-  UpdateDnsTargetConfigSchema,
-  validateConfig,
-  updateDnsTarget
 };
