@@ -2,7 +2,7 @@
   "name": "aws-ec2-ddns",
   "version": "1.0.0",
   "main": "index.js",
-  "author": "Juan David Suarez <juansuarezespitia@gmail.com>",
+  "author": "Juan David Suarez <juan@quov.io>",
   "license": "MIT",
   "private": false,
   "type": "module",
