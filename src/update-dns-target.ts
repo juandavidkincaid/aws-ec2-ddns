@@ -1,5 +1,4 @@
 import boxen from 'boxen';
-import axios from 'axios';
 import {
   type Change,
   ChangeAction,
@@ -70,11 +69,8 @@ export const updateDnsTarget = async (
     region: 'us-east-1'
   });
 
-  const ipAddressResponse = await axios.get<string>(
-    'http://checkip.amazonaws.com/'
-  );
-
-  const newIpAddress = ipAddressResponse.data.trim();
+  const ipAddressResponse = await fetch('http://checkip.amazonaws.com/');
+  const newIpAddress = (await ipAddressResponse.text()).trim();
 
   if (!validateIPv4Address(newIpAddress)) {
     throw new Error(`Malformed ip address, skipping => ${newIpAddress}`);

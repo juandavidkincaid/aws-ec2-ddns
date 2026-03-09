@@ -2,37 +2,53 @@
 
 ## Project Context
 
-**aws-ec2-ddns** is a Dynamic DNS (DDNS) CLI tool and systemd service for AWS EC2 instances. It fetches the instance's current public IP (via `checkip.amazonaws.com`), compares it against the existing Route 53 A record(s), and upserts only when the IP has changed.
+**aws-ec2-ddns** is a Dynamic DNS (DDNS) CLI tool and systemd service for AWS EC2 instances. It fetches the instance's current public IP (via `checkip.amazonaws.com`), compares it against existing Route 53 A record(s), and upserts only when the IP has changed.
 
 - **Language/Runtime**: TypeScript (latest, strict mode), Node.js (latest LTS), ESM (`"type": "module"`)
 - **Package Manager**: pnpm
-- **Execution**: Runs directly via `tsx` (no build/compile step)
+- **Execution**: `pnpm tsx` for dev, `bun build --compile` for binary distribution
 - **AWS Integration**: Route 53 (`@aws-sdk/client-route-53` — Client/Command pattern), credential providers (`@aws-sdk/credential-providers`)
-- **Key deps**: axios, commander, zod (v4), boxen, package-directory
+- **Key deps**: commander, zod (v4), boxen
+- **Binary targets**: Linux x64, Linux arm64
 
 ### Structure
 
-- `src/update-dns-target.ts` — Core logic (IP fetch, Route 53 upsert, Zod config validation)
-- `src/index.ts` — Barrel export
-- `scripts/install-service.ts` — Installs as a systemd `oneshot` service
-- `scripts/update-dns-target-with-args.ts` — CLI entry point (commander args)
-- `scripts/update-dns-target-with-config.ts` — Entry point reading JSON config from `.installations/`
-- `services/aws-ec2-ddns.service` — Systemd unit template
+```
+src/
+  cli.ts                    # Main CLI entry point (Commander root + subcommands)
+  commands/
+    consts.ts               # Shared constants (paths, service name, template)
+    update.ts               # `update` subcommand (DNS update with args or config)
+    register.ts             # `register` subcommand (systemd service setup)
+    uninstall.ts            # `uninstall` subcommand (remove service and files)
+  update-dns-target.ts      # Core logic (IP fetch, Route 53 upsert, Zod validation)
+  index.ts                  # Barrel export
+install.sh                  # One-liner installer script (curl | bash)
+```
 
 ## Essential Commands
 
 ```bash
-# Run DNS update with CLI args
-pnpm script scripts/update-dns-target-with-args.ts \
+# Run CLI in dev mode
+pnpm tsx src/cli.ts update \
   --hosted-zone-id <ZONE_ID> \
   --record-name <DOMAIN> \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 
-# Install as systemd service
-pnpm script scripts/install-service.ts \
+# Run from config file
+pnpm tsx src/cli.ts update --config <PATH_TO_JSON>
+
+# Register as systemd service
+pnpm tsx src/cli.ts register \
   --hosted-zone-id <ZONE_ID> \
   --record-name <DOMAIN1> [<DOMAIN2>...] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
+
+# Uninstall service and remove all files
+pnpm tsx src/cli.ts uninstall [--dry-run]
+
+# Build binaries (requires bun)
+pnpm build
 
 # Formatting
 pnpm format          # Check formatting
@@ -60,6 +76,7 @@ pnpm validate:fix
 - Avoid `as` assertions (except type guards, `as const`, API boundaries)
 - Prefer inline exports: `export type IProps = {...}`
 - Use `node:` prefix for Node.js built-in imports (`node:fs`, `node:path`, etc.)
+- Use native `fetch` — no axios
 
 ### File Naming
 
@@ -73,6 +90,22 @@ pnpm validate:fix
 2. Sibling packages
 3. Internal aliases (`#src/`)
 4. Relative imports
+
+### Commander (CLI)
+
+- Commander `.option()` / `.action()` config chain must appear at the **end** of the file
+- Extract action handlers into separate named arrow functions above the command definition
+- Keep the command export minimal — only configuration, no inline logic
+
+```typescript
+// Good
+const myAction = async (options: { ... }) => { ... };
+
+export const myCommand = new Command('foo')
+  .description('...')
+  .option(...)
+  .action(myAction);
+```
 
 ### Frontend
 
@@ -101,9 +134,10 @@ z.string().url()    → z.url()
 
 ## Tooling
 
-- **ESLint**: Flat config (`eslint.config.ts`), requires `jiti` for TS config
+- **ESLint**: Flat config (`eslint.config.ts`), uses `defineConfig` from `eslint/config`, requires `jiti` for TS config
 - **Prettier**: TS config (`prettier.config.ts`), decoupled from ESLint (no prettier plugin, uses `eslint-config-prettier` to avoid rule conflicts)
-- **TypeScript runner**: `tsx` (not `ts-node`)
+- **TypeScript runner**: `pnpm tsx` (not `ts-node`, not `npx tsx`)
+- **Binary builds**: `bun build --compile` targeting `bun-linux-x64` and `bun-linux-arm64`
 
 ## Do NOT
 
@@ -113,8 +147,10 @@ z.string().url()    → z.url()
 - Use npm/yarn (pnpm only)
 - Use Zod 3 patterns
 - Use `ts-node` (use `tsx`)
+- Use `npx` (use `pnpm` directly, e.g. `pnpm tsx`)
 - Use `eslint-plugin-prettier` (lint and format are decoupled)
 - Use deprecated APIs — always use current, non-deprecated signatures
+- Use axios (use native `fetch`)
 
 ## Research & Lookups
 

@@ -2,42 +2,41 @@
 
 Dynamic DNS (DDNS) tool for AWS EC2 instances. Fetches the instance's current public IP, compares it against existing Route 53 A record(s), and upserts only when the IP has changed.
 
-## Prerequisites
-
-- Node.js (latest LTS)
-- pnpm
-- AWS credentials with Route 53 permissions
-
-## Setup
+## Quick Install
 
 ```bash
-pnpm install
+curl -fsSL https://raw.githubusercontent.com/juandavidkincaid/aws-ec2-ddns/main/install.sh | sudo bash
 ```
+
+Installs the binary to `/opt/aws-ec2-ddns/bin/` with a symlink at `/usr/local/bin/aws-ec2-ddns`.
+
+## Prerequisites
+
+For binary usage: Linux x64 or arm64 (no Node.js required).
+
+For development: Node.js (latest LTS), pnpm, bun (for building binaries).
 
 ## Usage
 
-### Update DNS with CLI arguments
+### Update DNS records
 
 ```bash
-pnpm script scripts/update-dns-target-with-args.ts \
+aws-ec2-ddns update \
   --hosted-zone-id <ZONE_ID> \
   --record-name <DOMAIN> \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 ```
 
-### Update DNS from config file
+Or from a JSON config file:
 
 ```bash
-pnpm script scripts/update-dns-target-with-config.ts \
-  --json-config-file <PATH_TO_JSON>
+aws-ec2-ddns update --config /path/to/config.json
 ```
 
-### Install as systemd service
-
-Registers a `oneshot` systemd service that runs the DNS update on boot and can be triggered via timers.
+### Register as systemd service
 
 ```bash
-sudo pnpm script scripts/install-service.ts \
+sudo aws-ec2-ddns register \
   --hosted-zone-id <ZONE_ID> \
   --record-name <DOMAIN1> [<DOMAIN2>...] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
@@ -45,9 +44,18 @@ sudo pnpm script scripts/install-service.ts \
 
 This will:
 
-1. Generate a JSON config in `.installations/`
-2. Write a systemd unit to `/etc/systemd/system/aws-ec2-ddns.service`
-3. Enable and start the service
+1. Generate a JSON config in `/opt/aws-ec2-ddns/config/`
+2. Write a systemd unit to `/opt/aws-ec2-ddns/services/`
+3. Symlink the unit to `/etc/systemd/system/`
+4. Enable and start the service
+
+### Uninstall
+
+```bash
+sudo aws-ec2-ddns uninstall
+```
+
+Stops and disables the service, removes the binary, config, service files, and symlinks.
 
 ### Options
 
@@ -58,10 +66,17 @@ This will:
 | `-t, --ttl`            | TTL for created records          | `60`                |
 | `-p, --profile`        | AWS profile to use               | Default credentials |
 | `-d, --dry-run`        | Preview changes without applying | `false`             |
+| `-c, --config`         | JSON config file (update only)   | -                   |
 
 ## Development
 
 ```bash
+pnpm install
+
+# Run CLI in dev mode
+pnpm tsx src/cli.ts update --help
+pnpm tsx src/cli.ts register --help
+
 # Check formatting
 pnpm format
 
@@ -84,7 +99,22 @@ pnpm validate
 pnpm validate:fix
 ```
 
-## How it works
+## Building Binaries
+
+Requires [bun](https://bun.sh) installed.
+
+```bash
+# Build for both Linux x64 and arm64
+pnpm build
+
+# Build for specific architecture
+pnpm build:linux-x64
+pnpm build:linux-arm64
+```
+
+Binaries are output to `dist/`.
+
+## How It Works
 
 1. Fetches the instance's public IP from `checkip.amazonaws.com`
 2. Queries Route 53 for existing A records matching the configured domain(s)
