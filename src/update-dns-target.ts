@@ -11,17 +11,25 @@ import { fromIni } from '@aws-sdk/credential-providers';
 import { z, ZodError } from 'zod';
 import { fromZodError } from 'zod-validation-error';
 
-export type IUpdateDnsTargetConfig = z.infer<
-  typeof UpdateDnsTargetConfigSchema
->;
-
 export const UpdateDnsTargetConfigSchema = z.object({
   dryRun: z.boolean().optional(),
   ttl: z.number().min(1),
   profile: z.string().min(1).optional(),
-  hostedZoneId: z.string().min(1),
-  recordName: z.string().min(1).array()
+  targets: z
+    .object({
+      hostedZoneId: z.string().min(1),
+      recordName: z
+        .string()
+        .min(1)
+        .transform((v) => (v.endsWith('.') ? v : `${v}.`))
+    })
+    .array()
+    .min(1)
 });
+
+export type IUpdateDnsTargetConfig = z.infer<
+  typeof UpdateDnsTargetConfigSchema
+>;
 
 const validateIPv4Address = (ipAddress: string) => {
   const ipv4Regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
@@ -76,70 +84,70 @@ export const updateDnsTarget = async (
     throw new Error(`Malformed ip address, skipping => ${newIpAddress}`);
   }
 
-  const currentRecords = await route53.send(
-    new ListResourceRecordSetsCommand({
-      HostedZoneId: config.hostedZoneId
-    })
-  );
+  // Group targets by hosted zone
+  const zoneMap = new Map<string, string[]>();
+  for (const target of config.targets) {
+    const existing = zoneMap.get(target.hostedZoneId) ?? [];
+    existing.push(target.recordName);
+    zoneMap.set(target.hostedZoneId, existing);
+  }
 
-  const ipRecords = config.recordName.map((_recordName) => {
-    const route53Record = currentRecords.ResourceRecordSets?.find(
-      (record) => record.Name === _recordName && record.Type === RRType.A
+  for (const [hostedZoneId, recordNames] of zoneMap) {
+    console.log(`\nProcessing zone: ${hostedZoneId}`);
+
+    const currentRecords = await route53.send(
+      new ListResourceRecordSetsCommand({ HostedZoneId: hostedZoneId })
     );
 
-    const recordIpAddress = route53Record?.ResourceRecords?.[0].Value;
+    const changeBatch: Change[] = [];
 
-    return {
-      recordName: _recordName,
-      recordIpAddress,
-      route53Record
-    };
-  });
-
-  const changeBatch: Change[] = [];
-
-  for (const ipRecord of ipRecords) {
-    if (ipRecord.recordIpAddress === newIpAddress) {
-      console.log(
-        `[${ipRecord.recordName}]: Ip has not changed, skipping change`
+    for (const recordName of recordNames) {
+      const route53Record = currentRecords.ResourceRecordSets?.find(
+        (record) => record.Name === recordName && record.Type === RRType.A
       );
+
+      const recordIpAddress = route53Record?.ResourceRecords?.[0].Value;
+
+      if (recordIpAddress === newIpAddress) {
+        console.log(`[${recordName}]: Ip has not changed, skipping change`);
+        continue;
+      }
+
+      console.log(
+        `[${recordName}]: Adding change batch: Ip from ${recordIpAddress} to ${newIpAddress} with ttl ${config.ttl}`
+      );
+
+      changeBatch.push({
+        Action: ChangeAction.UPSERT,
+        ResourceRecordSet: {
+          Type: RRType.A,
+          Name: recordName,
+          ResourceRecords: [{ Value: newIpAddress }],
+          TTL: config.ttl
+        }
+      });
+    }
+
+    if (config.dryRun) {
+      console.log('Skip on dry run');
       continue;
     }
 
-    console.log(
-      `Adding change batch: Ip from ${ipRecord.recordIpAddress} to ${newIpAddress} with ttl ${config.ttl}`
+    if (changeBatch.length === 0) {
+      console.log('No records to update for this zone');
+      continue;
+    }
+
+    await route53.send(
+      new ChangeResourceRecordSetsCommand({
+        HostedZoneId: hostedZoneId,
+        ChangeBatch: {
+          Comment: 'Update from aws-ec2-ddns',
+          Changes: changeBatch
+        }
+      })
     );
 
-    changeBatch.push({
-      Action: ChangeAction.UPSERT,
-      ResourceRecordSet: {
-        Type: RRType.A,
-        Name: ipRecord.recordName,
-        ResourceRecords: [{ Value: newIpAddress }],
-        TTL: config.ttl
-      }
-    });
+    console.log(`Updated records for zone: ${hostedZoneId}`);
   }
-
-  if (config.dryRun) {
-    console.log('Skip on dry run');
-    return;
-  }
-
-  if (changeBatch.length === 0) {
-    console.log('No records to update, exiting');
-    return;
-  }
-
-  await route53.send(
-    new ChangeResourceRecordSetsCommand({
-      HostedZoneId: config.hostedZoneId,
-      ChangeBatch: {
-        Comment: 'Update from aws-ec2-ddns',
-        Changes: changeBatch
-      }
-    })
-  );
-
-  console.log('Updated records');
 };

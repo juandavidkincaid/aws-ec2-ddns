@@ -5,10 +5,7 @@ import fs from 'node:fs';
 import { Command } from 'commander';
 import boxen from 'boxen';
 
-import {
-  type IUpdateDnsTargetConfig,
-  validateConfig
-} from '../update-dns-target.ts';
+import { validateConfig } from '../update-dns-target.ts';
 
 import {
   SERVICE_NAME,
@@ -17,6 +14,7 @@ import {
   SYSTEMD_SERVICE_PATH,
   SERVICE_TEMPLATE
 } from './consts.ts';
+import { parseTarget, parseTtl } from './parsers.ts';
 
 const generateInstallationConfigFileName = () =>
   `${Date.now()}-${Math.floor(Math.random() * 1e9).toString(16)}.json`;
@@ -42,20 +40,24 @@ const detectCommand = (configPath: string): string => {
   ].join(' ');
 };
 
-const parseTtl = (value: string) => {
-  const number = parseInt(value, 10);
-  if (isNaN(number)) {
-    throw new Error(`Not valid number: ttl: ${value}`);
-  }
-  return number;
-};
+const registerService = async (options: {
+  dryRun?: boolean;
+  ttl: number;
+  profile?: string;
+  target: string[];
+}): Promise<void> => {
+  const targets = options.target.map(parseTarget);
 
-const registerService = async (
-  options: IUpdateDnsTargetConfig
-): Promise<void> => {
+  const config = {
+    dryRun: options.dryRun,
+    ttl: options.ttl,
+    profile: options.profile,
+    targets
+  };
+
   console.log(
     boxen(
-      options.dryRun
+      config.dryRun
         ? 'Dry run: Registering service for ddns'
         : 'Registering service for ddns',
       {
@@ -65,7 +67,7 @@ const registerService = async (
     )
   );
 
-  if (!validateConfig({ ...options, dryRun: false })) {
+  if (!validateConfig({ ...config, dryRun: false })) {
     return;
   }
 
@@ -77,7 +79,7 @@ const registerService = async (
   const command = detectCommand(installationConfigFilePath);
 
   const finalInstallationConfigFileContent = JSON.stringify(
-    { ...options, dryRun: false },
+    { ...config, dryRun: false },
     null,
     2
   );
@@ -93,7 +95,7 @@ const registerService = async (
   console.log('Service File Content');
   console.log(finalServiceFileContent);
 
-  if (options.dryRun) {
+  if (config.dryRun) {
     console.log('Skip on dry run');
     return;
   }
@@ -128,14 +130,10 @@ const registerService = async (
 export const registerCommand = new Command('register')
   .description('Register as a systemd service')
   .option('-d, --dry-run', 'Dry run')
-  .option('-t, --ttl <ttl>', 'TTL for created records', parseTtl, 60)
+  .option('--ttl <ttl>', 'TTL for created records', parseTtl, 60)
   .option('-p, --profile <profile>', 'AWS profile to use')
   .requiredOption(
-    '-z, --hosted-zone-id <hosted-zone-id>',
-    'AWS Route 53 Hosted Zone Id'
-  )
-  .requiredOption(
-    '-n, --record-name <record-name...>',
-    'Target domain record names to create records for'
+    '-t, --target <zone:domain...>',
+    'Target as hostedZoneId:domainName (repeatable)'
   )
   .action(registerService);

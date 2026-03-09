@@ -22,23 +22,35 @@ For development: Node.js (latest LTS), pnpm, bun (for building binaries).
 
 ```bash
 aws-ec2-ddns update \
-  --hosted-zone-id <ZONE_ID> \
-  --record-name <DOMAIN> \
+  --target <ZONE_ID>:<DOMAIN> \
+  [--target <ZONE_ID2>:<DOMAIN2>] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 ```
 
-Or from a JSON config file:
+Supports multiple targets across different hosted zones. Or from a JSON config file:
 
 ```bash
 aws-ec2-ddns update --config /path/to/config.json
+```
+
+Config file format:
+
+```json
+{
+  "ttl": 60,
+  "targets": [
+    { "hostedZoneId": "ZONE_1", "recordName": "a.example.com" },
+    { "hostedZoneId": "ZONE_2", "recordName": "b.other.com" }
+  ]
+}
 ```
 
 ### Register as systemd service
 
 ```bash
 sudo aws-ec2-ddns register \
-  --hosted-zone-id <ZONE_ID> \
-  --record-name <DOMAIN1> [<DOMAIN2>...] \
+  --target <ZONE_ID>:<DOMAIN> \
+  [--target <ZONE_ID2>:<DOMAIN2>] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 ```
 
@@ -59,14 +71,13 @@ Stops and disables the service, removes the binary, config, service files, and s
 
 ### Options
 
-| Flag                   | Description                      | Default             |
-| ---------------------- | -------------------------------- | ------------------- |
-| `-z, --hosted-zone-id` | AWS Route 53 Hosted Zone ID      | Required            |
-| `-n, --record-name`    | Domain record name(s) to update  | Required            |
-| `-t, --ttl`            | TTL for created records          | `60`                |
-| `-p, --profile`        | AWS profile to use               | Default credentials |
-| `-d, --dry-run`        | Preview changes without applying | `false`             |
-| `-c, --config`         | JSON config file (update only)   | -                   |
+| Flag            | Description                            | Default             |
+| --------------- | -------------------------------------- | ------------------- |
+| `-t, --target`  | Target as `zoneId:domain` (repeatable) | Required            |
+| `--ttl`         | TTL for created records                | `60`                |
+| `-p, --profile` | AWS profile to use                     | Default credentials |
+| `-d, --dry-run` | Preview changes without applying       | `false`             |
+| `-c, --config`  | JSON config file (update only)         | -                   |
 
 ## Development
 

@@ -18,6 +18,7 @@ src/
   cli.ts                    # Main CLI entry point (Commander root + subcommands)
   commands/
     consts.ts               # Shared constants (paths, service name, template)
+    parsers.ts              # Shared CLI argument parsers (--target, --ttl)
     update.ts               # `update` subcommand (DNS update with args or config)
     register.ts             # `register` subcommand (systemd service setup)
     uninstall.ts            # `uninstall` subcommand (remove service and files)
@@ -31,8 +32,8 @@ install.sh                  # One-liner installer script (curl | bash)
 ```bash
 # Run CLI in dev mode
 pnpm tsx src/cli.ts update \
-  --hosted-zone-id <ZONE_ID> \
-  --record-name <DOMAIN> \
+  --target <ZONE_ID>:<DOMAIN> \
+  [--target <ZONE_ID2>:<DOMAIN2>] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 
 # Run from config file
@@ -40,8 +41,8 @@ pnpm tsx src/cli.ts update --config <PATH_TO_JSON>
 
 # Register as systemd service
 pnpm tsx src/cli.ts register \
-  --hosted-zone-id <ZONE_ID> \
-  --record-name <DOMAIN1> [<DOMAIN2>...] \
+  --target <ZONE_ID>:<DOMAIN> \
+  [--target <ZONE_ID2>:<DOMAIN2>] \
   [--ttl 60] [--profile <AWS_PROFILE>] [--dry-run]
 
 # Uninstall service and remove all files
