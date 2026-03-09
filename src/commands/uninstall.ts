@@ -11,6 +11,14 @@ import {
   SYSTEMD_SERVICE_PATH
 } from './consts.ts';
 
+const tryExec = (command: string) => {
+  try {
+    child_process.execSync(command, { stdio: 'inherit' });
+  } catch {
+    console.log(`Skipped: ${command}`);
+  }
+};
+
 const tryUnlink = async (filePath: string) => {
   try {
     await fs.promises.unlink(filePath);
@@ -35,7 +43,7 @@ const uninstallService = async (options: { dryRun?: boolean }) => {
 
   console.log('Will remove:');
   console.log(`  Service:  ${SYSTEMD_SERVICE_PATH}`);
-  console.log(`  Symlink:  ${SYMLINK_PATH}`);
+  console.log(`  Wrapper:  ${SYMLINK_PATH}`);
   console.log(`  Data dir: ${OPT_DIR}/`);
 
   if (options.dryRun) {
@@ -43,18 +51,14 @@ const uninstallService = async (options: { dryRun?: boolean }) => {
     return;
   }
 
-  child_process.execSync(`systemctl stop ${SERVICE_NAME}`, {
-    stdio: 'inherit'
-  });
-  child_process.execSync(`systemctl disable ${SERVICE_NAME}`, {
-    stdio: 'inherit'
-  });
+  tryExec(`systemctl stop ${SERVICE_NAME}`);
+  tryExec(`systemctl disable ${SERVICE_NAME}`);
 
   await tryUnlink(SYSTEMD_SERVICE_PATH);
 
-  child_process.execSync('systemctl daemon-reload', { stdio: 'inherit' });
+  tryExec('systemctl daemon-reload');
 
-  // Remove binary symlink
+  // Remove wrapper script
   await tryUnlink(SYMLINK_PATH);
 
   // Remove /opt/aws-ec2-ddns
