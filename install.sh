@@ -72,8 +72,12 @@ curl -fsSL -o "${TMP_FILE}" "${DOWNLOAD_URL}"
 chmod +x "${TMP_FILE}"
 mv "${TMP_FILE}" "${BIN_DIR}/${BINARY_NAME}"
 
-# Create symlink in PATH
-ln -sf "${BIN_DIR}/${BINARY_NAME}" "${SYMLINK_PATH}"
+# Create wrapper script in PATH (symlink breaks bun compiled binary detection)
+cat > "${SYMLINK_PATH}" <<WRAPPER
+#!/usr/bin/env bash
+exec "${BIN_DIR}/${BINARY_NAME}" "\$@"
+WRAPPER
+chmod +x "${SYMLINK_PATH}"
 
 echo ""
 echo "${BINARY_NAME} ${LATEST_TAG} installed successfully"
@@ -83,7 +87,7 @@ echo "  Symlink: ${SYMLINK_PATH}"
 echo "  Config:  ${OPT_DIR}/config/"
 echo ""
 echo "Usage:"
-echo "  ${BINARY_NAME} update --hosted-zone-id <ZONE_ID> --record-name <DOMAIN> [--dry-run]"
-echo "  sudo ${BINARY_NAME} install --hosted-zone-id <ZONE_ID> --record-name <DOMAIN> [--dry-run]"
+echo "  ${BINARY_NAME} update --target <ZONE_ID>:<DOMAIN> [--dry-run]"
+echo "  sudo ${BINARY_NAME} register --target <ZONE_ID>:<DOMAIN> [--dry-run]"
 echo ""
 echo "Run '${BINARY_NAME} --help' for more information."
