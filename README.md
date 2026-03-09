@@ -8,11 +8,11 @@ Dynamic DNS (DDNS) tool for AWS EC2 instances. Fetches the instance's current pu
 curl -fsSL https://aws-ec2-ddns.juandavidkincaid.me/install.sh | sudo bash
 ```
 
-Installs the binary to `/opt/aws-ec2-ddns/bin/` with a symlink at `/usr/local/bin/aws-ec2-ddns`.
+Installs the binary to `/opt/aws-ec2-ddns/bin/` with a wrapper script at `/usr/local/bin/aws-ec2-ddns`.
 
 ## Prerequisites
 
-For binary usage: Linux x64 or arm64 (no Node.js required).
+For binary usage: Linux or macOS, x64 or arm64 (no Node.js required).
 
 For development: Node.js (latest LTS), pnpm, bun (for building binaries).
 
@@ -61,13 +61,21 @@ This will:
 3. Symlink the unit to `/etc/systemd/system/`
 4. Enable and start the service
 
+### Check status
+
+```bash
+aws-ec2-ddns status
+```
+
+Shows the systemd service status (active/inactive, enabled/disabled) and the current configuration.
+
 ### Uninstall
 
 ```bash
-sudo aws-ec2-ddns uninstall
+sudo aws-ec2-ddns uninstall [--dry-run]
 ```
 
-Stops and disables the service, removes the binary, config, service files, and symlinks.
+Stops and disables the service (best-effort if not registered), removes the binary, config, service files, and wrapper script.
 
 ### Options
 
@@ -115,12 +123,14 @@ pnpm validate:fix
 Requires [bun](https://bun.sh) installed.
 
 ```bash
-# Build for both Linux x64 and arm64
+# Build for all platforms (Linux + macOS, x64 + arm64)
 pnpm build
 
-# Build for specific architecture
+# Build for specific platform
 pnpm build:linux-x64
 pnpm build:linux-arm64
+pnpm build:darwin-x64
+pnpm build:darwin-arm64
 ```
 
 Binaries are output to `dist/`.

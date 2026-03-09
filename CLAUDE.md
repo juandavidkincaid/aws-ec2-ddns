@@ -9,7 +9,7 @@
 - **Execution**: `pnpm tsx` for dev, `bun build --compile` for binary distribution
 - **AWS Integration**: Route 53 (`@aws-sdk/client-route-53` — Client/Command pattern), credential providers (`@aws-sdk/credential-providers`)
 - **Key deps**: commander, zod (v4), boxen
-- **Binary targets**: Linux x64, Linux arm64
+- **Binary targets**: Linux x64, Linux arm64, macOS x64, macOS arm64
 
 ### Structure
 
@@ -22,9 +22,11 @@ src/
     update.ts               # `update` subcommand (DNS update with args or config)
     register.ts             # `register` subcommand (systemd service setup)
     uninstall.ts            # `uninstall` subcommand (remove service and files)
+    status.ts               # `status` subcommand (service status + config)
   update-dns-target.ts      # Core logic (IP fetch, Route 53 upsert, Zod validation)
   index.ts                  # Barrel export
 install.sh                  # One-liner installer script (curl | bash)
+terraform/                  # Infrastructure (S3, CloudFront, ACM, R53, IAM)
 ```
 
 ## Essential Commands
@@ -47,6 +49,9 @@ pnpm tsx src/cli.ts register \
 
 # Uninstall service and remove all files
 pnpm tsx src/cli.ts uninstall [--dry-run]
+
+# Check service status and configuration
+pnpm tsx src/cli.ts status
 
 # Build binaries (requires bun)
 pnpm build
@@ -138,7 +143,9 @@ z.string().url()    → z.url()
 - **ESLint**: Flat config (`eslint.config.ts`), uses `defineConfig` from `eslint/config`, requires `jiti` for TS config
 - **Prettier**: TS config (`prettier.config.ts`), decoupled from ESLint (no prettier plugin, uses `eslint-config-prettier` to avoid rule conflicts)
 - **TypeScript runner**: `pnpm tsx` (not `ts-node`, not `npx tsx`)
-- **Binary builds**: `bun build --compile` targeting `bun-linux-x64` and `bun-linux-arm64`
+- **Binary builds**: `bun build --compile` targeting `bun-linux-x64`, `bun-linux-arm64`, `bun-darwin-x64`, `bun-darwin-arm64`
+- **Infrastructure**: Terraform (S3 + CloudFront OAC + ACM + R53) for hosting `install.sh`
+- **CI/CD**: GitHub Actions release workflow with OIDC-federated AWS access
 
 ## Do NOT
 
