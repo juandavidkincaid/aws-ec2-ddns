@@ -1,3 +1,4 @@
 .claude/
 .installations/
 pnpm-lock.yaml
+terraform/

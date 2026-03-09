@@ -5,7 +5,7 @@ Dynamic DNS (DDNS) tool for AWS EC2 instances. Fetches the instance's current pu
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/juandavidkincaid/aws-ec2-ddns/main/install.sh | sudo bash
+curl -fsSL https://aws-ec2-ddns.juandavidkincaid.me/install.sh | sudo bash
 ```
 
 Installs the binary to `/opt/aws-ec2-ddns/bin/` with a symlink at `/usr/local/bin/aws-ec2-ddns`.
