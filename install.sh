@@ -69,15 +69,11 @@ echo "Downloading ${DOWNLOAD_URL}..."
 curl -fsSL -o "${TMP_FILE}" "${DOWNLOAD_URL}"
 
 # Install binary
-chmod +x "${TMP_FILE}"
+chmod 755 "${TMP_FILE}"
 mv "${TMP_FILE}" "${BIN_DIR}/${BINARY_NAME}"
 
-# Create wrapper script in PATH (symlink breaks bun compiled binary detection)
-cat > "${SYMLINK_PATH}" <<WRAPPER
-#!/usr/bin/env bash
-exec "${BIN_DIR}/${BINARY_NAME}" "\$@"
-WRAPPER
-chmod +x "${SYMLINK_PATH}"
+# Symlink to PATH
+ln -sf "${BIN_DIR}/${BINARY_NAME}" "${SYMLINK_PATH}"
 
 echo ""
 echo "${BINARY_NAME} ${LATEST_TAG} installed successfully"
